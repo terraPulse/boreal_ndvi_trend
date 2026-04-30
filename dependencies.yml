@@ -1,0 +1,9 @@
+name: python
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - geopandas
+  - earthaccess
+  - gdal
+  - scipy
