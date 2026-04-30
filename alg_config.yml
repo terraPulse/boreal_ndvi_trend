@@ -2,7 +2,7 @@ algorithm_description: Process Boreal HLS NDVI Temporal Trend
 algorithm_name: boreal_ndvi_trend
 algorithm_version: v0.1
 build_command: boreal_ndvi_trend/build_env.sh
-disk_space: 8GB
+disk_space: 16GB
 docker_container_url: mas.maap-project.org/root/maap-workspaces/custom_images/maap_base:v5.0.0
 inputs:
   config: []
