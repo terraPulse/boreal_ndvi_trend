@@ -10,7 +10,7 @@ import tempfile
 import logging
 import shutil
 # import threading
-# from maap.maap import MAAP
+from maap.maap import MAAP
 # from boto3 import Session
 # from typing import Any
 
