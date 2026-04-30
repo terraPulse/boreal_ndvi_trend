@@ -28,7 +28,7 @@ inputs:
     name: de
     required: true
   - default: ''
-    description: 'ouput directory' 
+    description: 'output directory' 
     name: output
     required: true
 queue: maap-dps-worker-16gb
