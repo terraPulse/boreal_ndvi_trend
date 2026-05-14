@@ -1,0 +1,33 @@
+name: Build and Push to MAAP Registry
+
+# Triggers the workflow on push events to the main branch
+on:
+  push:
+    branches:
+      - main 
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to MAAP Docker Registry
+        uses: docker/login-action@v3
+        with:
+          registry: mas.maap-project.org
+          username: ${{ secrets.MAAP_REGISTRY_USER }}
+          password: ${{ secrets.MAAP_REGISTRY_PASSWORD }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          # Note: Replace 'your-maap-namespace' with your actual namespace in MAAP
+          tags: mas.maap-project.org/your-maap-namespace/boreal_ndvi_trend:latest
