@@ -30,4 +30,4 @@ jobs:
           context: .
           push: true
           # Note: Replace 'your-maap-namespace' with your actual namespace in MAAP
-          tags: mas.maap-project.org/your-maap-namespace/boreal_ndvi_trend:latest
+          tags: mas.maap-project.org/pswang/boreal_ndvi_trend:latest
