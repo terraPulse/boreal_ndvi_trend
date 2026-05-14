@@ -22,7 +22,7 @@ basedir=$( cd "$(dirname "$0")" ; pwd -P )
 # This PWD is wherever the job is run (where the .sh is called from) 
 OUTPUTDIR="${PWD}/output"
 
-python ${basedir}/../../lib/download_gee_tiles.py \
+python ${basedir}/boreal_ndvi_trend.py \
 --tile ${1} \
 --ys ${2} \
 --ye ${3} \
