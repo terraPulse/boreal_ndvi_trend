@@ -22,6 +22,9 @@ basedir=$( cd "$(dirname "$0")" ; pwd -P )
 # This PWD is wherever the job is run (where the .sh is called from) 
 OUTPUTDIR="${PWD}/output"
 
+export EARTHDATA_USERNAME=${7}
+export EARTHDATA_PASSWORD=${8}
+
 python ${basedir}/boreal_ndvi_trend.py \
 --tile ${1} \
 --ys ${2} \
