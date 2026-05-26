@@ -31,6 +31,6 @@ python ${basedir}/boreal_ndvi_trend.py \
 --ye ${3} \
 --ds ${4} \
 --de ${5} \
---output ${OUTPUTDIR}
---user ${7}
+--output ${OUTPUTDIR} \
+--user ${7} \
 --pwd ${8}
