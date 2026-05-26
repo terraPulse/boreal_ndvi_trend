@@ -9,6 +9,7 @@ import earthaccess
 import tempfile
 import logging
 import shutil
+import os
 # import threading
 # from maap.maap import MAAP
 # from boto3 import Session
@@ -17,7 +18,6 @@ import shutil
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(name)s - %(message)s")
 logger = logging.getLogger("boreal_ndvi_trend")
 
-earthaccess.login()
 # GDAL configurations used to successfully access LP DAAC Cloud Assets via vsicurl 
 gdal.SetConfigOption('GDAL_HTTP_COOKIEFILE','~/cookies.txt')
 gdal.SetConfigOption('GDAL_HTTP_COOKIEJAR', '~/cookies.txt')
@@ -212,7 +212,15 @@ def main():
 	parser.add_argument('--ds',type=str,required=True)
 	parser.add_argument('--de',type=str,required=True)
 	parser.add_argument('--output',type=str,required=True)
+	parser.add_argument('--user',type=str,required=True)
+	parser.add_argument('--pwd',type=str,required=True)
 	args = parser.parse_args()
+	logger.info("Username: "+os.environ.get('EARTHDATA_USERNAME'))
+	logger.info("Password: "+os.environ.get('EARTHDATA_PASSWORD'))
+	os.environ["EARTHDATA_USERNAME"] = user
+	os.environ["EARTHDATA_PASSWORD"] = pwd
+	
+	earthaccess.login()
 	boreal_ndvi_trend(args.tile,args.ys,args.ye,args.ds,args.de,args.output)
 if __name__ == '__main__':
 	main()
