@@ -217,8 +217,8 @@ def main():
 	args = parser.parse_args()
 	logger.info("Username: "+os.environ.get('EARTHDATA_USERNAME'))
 	logger.info("Password: "+os.environ.get('EARTHDATA_PASSWORD'))
-	os.environ["EARTHDATA_USERNAME"] = user
-	os.environ["EARTHDATA_PASSWORD"] = pwd
+	os.environ["EARTHDATA_USERNAME"] = args.user
+	os.environ["EARTHDATA_PASSWORD"] = args.pwd
 	
 	earthaccess.login()
 	boreal_ndvi_trend(args.tile,args.ys,args.ye,args.ds,args.de,args.output)
