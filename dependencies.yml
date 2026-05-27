@@ -7,3 +7,4 @@ dependencies:
   - earthaccess
   - gdal
   - scipy
+  - maap-py
