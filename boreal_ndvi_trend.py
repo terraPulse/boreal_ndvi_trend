@@ -10,14 +10,12 @@ import tempfile
 import logging
 import shutil
 import os
-# import threading
-# from maap.maap import MAAP
-# from boto3 import Session
-# from typing import Any
+from maap.maap import MAAP
+from boto3 import Session
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(name)s - %(message)s")
 logger = logging.getLogger("boreal_ndvi_trend")
-
+maap = MAAP()
 # GDAL configurations used to successfully access LP DAAC Cloud Assets via vsicurl 
 gdal.SetConfigOption('GDAL_HTTP_COOKIEFILE','~/cookies.txt')
 gdal.SetConfigOption('GDAL_HTTP_COOKIEJAR', '~/cookies.txt')
@@ -28,38 +26,6 @@ gdal.SetConfigOption('GDAL_HTTP_MAX_RETRY', '10')
 gdal.SetConfigOption('GDAL_HTTP_RETRY_DELAY', '0.5')
 gdal.SetConfigOption('GDAL_HTTP_RETRY_DELAY', '0.5')
 gdal.SetConfigOption('AWS_REQUEST_PAYER', 'requester')
-
-# # LPCLOUD S3 CREDENTIAL REFRESH
-# CREDENTIAL_REFRESH_SECONDS = 50 * 60
-
-
-# class CredentialManager:
-# 	def __init__(self):
-# 		self._lock = threading.Lock()
-# 		self._credentials: dict[str, Any] | None = None
-# 		self._fetch_time: float | None = None
-# 		self._session: Session | None = None
-# 	def get_session(self) -> Session:
-# 		"""Get current session, refreshing credentials if needed"""
-# 		with self._lock:
-# 			now = time.time()
-# 			# Check if credentials need refresh
-# 			if (self._credentials is None or self._fetch_time is None or (now - self._fetch_time) > CREDENTIAL_REFRESH_SECONDS):
-# 				logger.info("fetching/refreshing S3 credentials")
-# 				self._credentials = self._fetch_credentials()
-# 				self._fetch_time = now
-# 				self._session = Session(**self._credentials)
-# 			return self._session
-
-# 	@staticmethod
-# 	def _fetch_credentials() -> dict[str, Any]:
-# 		"""Fetch new credentials from MAAP"""
-# 		maap = MAAP(maap_host="api.maap-project.org")
-# 		creds = maap.aws.earthdata_s3_credentials("https://data.lpdaac.earthdatacloud.nasa.gov/s3credentials")
-# 		return {"aws_access_key_id": creds["accessKeyId"],"aws_secret_access_key": creds["secretAccessKey"],"aws_session_token": creds["sessionToken"],"region_name": "us-west-2",}
-
-# # Global credential manager instance
-# _credential_manager = CredentialManager()
 
 def mask_hls(qa_arr, mask_list=['water','snowice']):
 	QA_BIT = {'cirrus': 0,'cloud': 1,'adj_cloud': 2,'cloud shadow':3,'snowice':4,'water':5,'aerosol_l': 6,'aerosol_h': 7}
@@ -99,8 +65,7 @@ def get_files(bbox, start_date, end_date):
 	return file_list
 
 def boreal_ndvi_trend(tile,ys,ye,ds,de,output):
-	# session = _credential_manager.get_session()
-	# s3 = boto3.client("s3", region_name="us-west-2")
+	s3 = boto3.client("s3", region_name="us-west-2")
 	bbox = tile_bounds(tile)
 	gt = None
 	wkt = None
@@ -219,7 +184,7 @@ def main():
 	logger.info("Password: "+os.environ.get('EARTHDATA_PASSWORD'))
 	os.environ["EARTHDATA_USERNAME"] = args.user
 	os.environ["EARTHDATA_PASSWORD"] = args.pwd
-	
+	os.environ['AWS_REQUEST_PAYER'] = 'requester'
 	earthaccess.login()
 	boreal_ndvi_trend(args.tile,args.ys,args.ye,args.ds,args.de,args.output)
 if __name__ == '__main__':
