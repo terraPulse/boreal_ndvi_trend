@@ -15,7 +15,7 @@ from boto3 import Session
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(name)s - %(message)s")
 logger = logging.getLogger("boreal_ndvi_trend")
-maap = MAAP()
+# maap = MAAP()
 # GDAL configurations used to successfully access LP DAAC Cloud Assets via vsicurl 
 gdal.SetConfigOption('GDAL_HTTP_COOKIEFILE','~/cookies.txt')
 gdal.SetConfigOption('GDAL_HTTP_COOKIEJAR', '~/cookies.txt')
