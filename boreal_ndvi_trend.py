@@ -10,7 +10,7 @@ import tempfile
 import logging
 import shutil
 import os
-from maap.maap import MAAP
+# from maap.maap import MAAP
 from boto3 import Session
 import boto3
 
