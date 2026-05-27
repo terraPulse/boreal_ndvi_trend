@@ -12,6 +12,7 @@ import shutil
 import os
 from maap.maap import MAAP
 from boto3 import Session
+import boto3
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(name)s - %(message)s")
 logger = logging.getLogger("boreal_ndvi_trend")
