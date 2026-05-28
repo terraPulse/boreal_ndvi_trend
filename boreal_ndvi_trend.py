@@ -28,6 +28,35 @@ gdal.SetConfigOption('GDAL_HTTP_RETRY_DELAY', '0.5')
 gdal.SetConfigOption('GDAL_HTTP_RETRY_DELAY', '0.5')
 gdal.SetConfigOption('AWS_REQUEST_PAYER', 'requester')
 
+def assume_role_credentials(ssm_parameter_name):
+    # Create a session using your current credentials
+    session = boto3.Session()
+
+    # Retrieve the SSM parameter
+    ssm = session.client('ssm', "us-west-2")
+    parameter = ssm.get_parameter(
+        Name=ssm_parameter_name,
+        WithDecryption=True
+    )
+    parameter_value = parameter['Parameter']['Value']
+
+    # Assume the DAAC access role
+    sts = session.client('sts')
+    assumed_role_object = sts.assume_role(
+        RoleArn=parameter_value,
+        RoleSessionName='TutorialSession'
+    )
+
+    # From the response that contains the assumed role, get the temporary
+    # credentials that can be used to make subsequent API calls
+    credentials = assumed_role_object['Credentials']
+    return credentials
+	
+def maap_s3_session(credentials):
+    return boto3.Session(aws_access_key_id=credentials['AccessKeyId'],aws_secret_access_key=credentials['SecretAccessKey'],aws_session_token=credentials['SessionToken'],region_name='us-west-2')
+
+s3_session = maap_s3_session(assume_role_credentials("/iam/maap-data-reader"))
+
 def split_s3_path(s3_path):
     path_parts=s3_path.replace("s3://","").split("/")
     bucket=path_parts.pop(0)
@@ -76,7 +105,8 @@ def get_files(bbox, start_date, end_date):
 	return file_list
 
 def boreal_ndvi_trend(tile,ys,ye,ds,de,output):
-	s3 = boto3.client("s3", region_name="us-west-2")
+	# s3 = boto3.client("s3", region_name="us-west-2")
+	s3 = s3_session.client('s3')
 	bbox = tile_bounds(tile)
 	gt = None
 	wkt = None
