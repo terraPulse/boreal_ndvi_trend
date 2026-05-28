@@ -97,41 +97,44 @@ def boreal_ndvi_trend(tile,ys,ye,ds,de,output):
 					logger.info(ndvi_file)
 					#ndvi_bucket,ndvi_key = split_s3_path(ndvi_file)
 					#s3.download_file(ndvi_bucket,ndvi_key, f'{tmpdir}/ndvi_tmp.tif')
-					local_file = earthaccess.download(ndvi_file,local_path=cachedir,provider='LPCLOUD')
-					print(local_file)
-					ndvi_warped = gdal.Warp(f'{tmpdir}/ndvi.tif', local_file, options=warp_options)
-					ndvi_warped = None
-					ndvi_ds = gdal.Open(f'{tmpdir}/ndvi.tif')
-					ndvi_arr = ndvi_ds.GetRasterBand(1).ReadAsArray()
-					gt = ndvi_ds.GetGeoTransform()
-					wkt = ndvi_ds.GetProjectionRef()
-					xsize, ysize=ndvi_ds.RasterXSize,ndvi_ds.RasterYSize
-					ndvi_ds = None
-					#s3.download_file(ndvi_bucket,ndvi_file.replace('_VI','').replace('-VI','').replace('NDVI.tif','Fmask.tif'), f'{tmpdir}/fmask_tmp.tif',ExtraArgs={'RequestPayer': 'requester'})
-					local_file_fmask = earthaccess.download(ndvi_file.replace('_VI','').replace('-VI','').replace('NDVI.tif','Fmask.tif'),local_path=cachedir,provider='LPCLOUD')
-					print(local_file_fmask)
-					qa_warped = gdal.Warp(f'{tmpdir}/qa.tif', local_file_fmask, options=warp_options)
-					qa_warped = None
-					qa_ds = gdal.Open(f'{tmpdir}/qa.tif')
-					qa_arr = qa_ds.GetRasterBand(1).ReadAsArray()
-					qa_ds = None
-					mask = mask_hls(qa_arr,mask_list=['water','snowice'])
-					ndvi_arr = np.where((ndvi_arr == nodata) |(mask == 1),np.nan,0.0001*ndvi_arr)
-					# max_ndvi = np.fmax(max_ndvi,ndvi_arr)
-					if n is None:
-						n = np.where(np.isnan(ndvi_arr),0,1)
-						sum_x = np.where(np.isnan(ndvi_arr),0,year)
-						sum_y = np.where(np.isnan(ndvi_arr),0,ndvi_arr)
-						sum_xx = np.where(np.isnan(ndvi_arr),0,year*year)
-						sum_yy = np.where(np.isnan(ndvi_arr),0,ndvi_arr*ndvi_arr)
-						sum_xy = np.where(np.isnan(ndvi_arr),0,year*ndvi_arr)
-					else:
-						n += np.where(np.isnan(ndvi_arr),0,1)
-						sum_x += np.where(np.isnan(ndvi_arr),0,year)
-						sum_y += np.where(np.isnan(ndvi_arr),0,ndvi_arr)
-						sum_xx += np.where(np.isnan(ndvi_arr),0,year*year)
-						sum_yy += np.where(np.isnan(ndvi_arr),0,ndvi_arr*ndvi_arr)
-						sum_xy += np.where(np.isnan(ndvi_arr),0,year*ndvi_arr)
+					try:
+						local_file = earthaccess.download(ndvi_file,local_path=cachedir,provider='LPCLOUD')
+						print(local_file)
+						ndvi_warped = gdal.Warp(f'{tmpdir}/ndvi.tif', local_file, options=warp_options)
+						ndvi_warped = None
+						ndvi_ds = gdal.Open(f'{tmpdir}/ndvi.tif')
+						ndvi_arr = ndvi_ds.GetRasterBand(1).ReadAsArray()
+						gt = ndvi_ds.GetGeoTransform()
+						wkt = ndvi_ds.GetProjectionRef()
+						xsize, ysize=ndvi_ds.RasterXSize,ndvi_ds.RasterYSize
+						ndvi_ds = None
+						#s3.download_file(ndvi_bucket,ndvi_file.replace('_VI','').replace('-VI','').replace('NDVI.tif','Fmask.tif'), f'{tmpdir}/fmask_tmp.tif',ExtraArgs={'RequestPayer': 'requester'})
+						local_file_fmask = earthaccess.download(ndvi_file.replace('_VI','').replace('-VI','').replace('NDVI.tif','Fmask.tif'),local_path=cachedir,provider='LPCLOUD')
+						print(local_file_fmask)
+						qa_warped = gdal.Warp(f'{tmpdir}/qa.tif', local_file_fmask, options=warp_options)
+						qa_warped = None
+						qa_ds = gdal.Open(f'{tmpdir}/qa.tif')
+						qa_arr = qa_ds.GetRasterBand(1).ReadAsArray()
+						qa_ds = None
+						mask = mask_hls(qa_arr,mask_list=['water','snowice'])
+						ndvi_arr = np.where((ndvi_arr == nodata) |(mask == 1),np.nan,0.0001*ndvi_arr)
+						# max_ndvi = np.fmax(max_ndvi,ndvi_arr)
+						if n is None:
+							n = np.where(np.isnan(ndvi_arr),0,1)
+							sum_x = np.where(np.isnan(ndvi_arr),0,year)
+							sum_y = np.where(np.isnan(ndvi_arr),0,ndvi_arr)
+							sum_xx = np.where(np.isnan(ndvi_arr),0,year*year)
+							sum_yy = np.where(np.isnan(ndvi_arr),0,ndvi_arr*ndvi_arr)
+							sum_xy = np.where(np.isnan(ndvi_arr),0,year*ndvi_arr)
+						else:
+							n += np.where(np.isnan(ndvi_arr),0,1)
+							sum_x += np.where(np.isnan(ndvi_arr),0,year)
+							sum_y += np.where(np.isnan(ndvi_arr),0,ndvi_arr)
+							sum_xx += np.where(np.isnan(ndvi_arr),0,year*year)
+							sum_yy += np.where(np.isnan(ndvi_arr),0,ndvi_arr*ndvi_arr)
+							sum_xy += np.where(np.isnan(ndvi_arr),0,year*ndvi_arr)
+					except Exception as e:
+						logger.info(f'Error processing {ndvi_file}: {e}')
 		with np.errstate(divide='ignore', invalid='ignore'):
 			denom = (n * sum_xx) - (sum_x**2)
 			slopes = ((n * sum_xy) - (sum_x * sum_y)) / denom
