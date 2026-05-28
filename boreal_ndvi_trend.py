@@ -13,6 +13,7 @@ import os
 # from maap.maap import MAAP
 # from boto3 import Session
 import boto3
+import requests
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(name)s - %(message)s")
 logger = logging.getLogger("boreal_ndvi_trend")
@@ -27,35 +28,6 @@ gdal.SetConfigOption('GDAL_HTTP_MAX_RETRY', '10')
 gdal.SetConfigOption('GDAL_HTTP_RETRY_DELAY', '0.5')
 gdal.SetConfigOption('GDAL_HTTP_RETRY_DELAY', '0.5')
 gdal.SetConfigOption('AWS_REQUEST_PAYER', 'requester')
-
-def assume_role_credentials(ssm_parameter_name):
-    # Create a session using your current credentials
-    session = boto3.Session()
-
-    # Retrieve the SSM parameter
-    ssm = session.client('ssm', "us-west-2")
-    parameter = ssm.get_parameter(
-        Name=ssm_parameter_name,
-        WithDecryption=True
-    )
-    parameter_value = parameter['Parameter']['Value']
-
-    # Assume the DAAC access role
-    sts = session.client('sts')
-    assumed_role_object = sts.assume_role(
-        RoleArn=parameter_value,
-        RoleSessionName='TutorialSession'
-    )
-
-    # From the response that contains the assumed role, get the temporary
-    # credentials that can be used to make subsequent API calls
-    credentials = assumed_role_object['Credentials']
-    return credentials
-	
-def maap_s3_session(credentials):
-    return boto3.Session(aws_access_key_id=credentials['AccessKeyId'],aws_secret_access_key=credentials['SecretAccessKey'],aws_session_token=credentials['SessionToken'],region_name='us-west-2')
-
-s3_session = maap_s3_session(assume_role_credentials("/iam/maap-data-reader"))
 
 def split_s3_path(s3_path):
     path_parts=s3_path.replace("s3://","").split("/")
@@ -94,19 +66,15 @@ def get_files(bbox, start_date, end_date):
 	for rec in results:
 		for url in rec.data_links(access='direct'):
 			if 'NDVI' in url:
-				# file_list.append(url.replace('s3://','/vsis3/'))
 				file_list.append(url)
 	results = earthaccess.search_data(short_name='HLSS30_VI',cloud_hosted=True,temporal = (start_date, end_date),bounding_box = bbox)
 	for rec in results:
 		for url in rec.data_links(access='direct'):
 			if 'NDVI' in url:
-				# file_list.append(url.replace('s3://','/vsis3/'))
 				file_list.append(url)
 	return file_list
 
 def boreal_ndvi_trend(tile,ys,ye,ds,de,output):
-	# s3 = boto3.client("s3", region_name="us-west-2")
-	s3 = s3_session.client('s3')
 	bbox = tile_bounds(tile)
 	gt = None
 	wkt = None
@@ -124,41 +92,46 @@ def boreal_ndvi_trend(tile,ys,ye,ds,de,output):
 		for year in range(ys,ye+1):
 			ndvi_files = get_files(bbox,f'{year}-{ds}',f'{year}-{de}')
 			# max_ndvi = np.full((4000, 4000), np.nan)
-			for ndvi_file in ndvi_files:
-				ndvi_bucket,ndvi_key = split_s3_path(ndvi_file)
-				s3.download_file(ndvi_bucket,ndvi_key, f'{tmpdir}/ndvi_tmp.tif',ExtraArgs={'RequestPayer': 'requester'})
-				print(ndvi_file)
-				ndvi_warped = gdal.Warp(f'{tmpdir}/ndvi.tif', f'{tmpdir}/ndvi_tmp.tif', options=warp_options)
-				ndvi_warped = None
-				ndvi_ds = gdal.Open(f'{tmpdir}/ndvi.tif')
-				ndvi_arr = ndvi_ds.GetRasterBand(1).ReadAsArray()
-				gt = ndvi_ds.GetGeoTransform()
-				wkt = ndvi_ds.GetProjectionRef()
-				xsize, ysize=ndvi_ds.RasterXSize,ndvi_ds.RasterYSize
-				ndvi_ds = None
-				s3.download_file(ndvi_bucket,ndvi_file.replace('_VI','').replace('-VI','').replace('NDVI.tif','Fmask.tif'), f'{tmpdir}/fmask_tmp.tif',ExtraArgs={'RequestPayer': 'requester'})
-				qa_warped = gdal.Warp(f'{tmpdir}/qa.tif', f'{tmpdir}/fmask_tmp.tif', options=warp_options)
-				qa_warped = None
-				qa_ds = gdal.Open(f'{tmpdir}/qa.tif')
-				qa_arr = qa_ds.GetRasterBand(1).ReadAsArray()
-				qa_ds = None
-				mask = mask_hls(qa_arr,mask_list=['water','snowice'])
-				ndvi_arr = np.where((ndvi_arr == nodata) |(mask == 1),np.nan,0.0001*ndvi_arr)
-				# max_ndvi = np.fmax(max_ndvi,ndvi_arr)
-				if n is None:
-					n = np.where(np.isnan(ndvi_arr),0,1)
-					sum_x = np.where(np.isnan(ndvi_arr),0,year)
-					sum_y = np.where(np.isnan(ndvi_arr),0,ndvi_arr)
-					sum_xx = np.where(np.isnan(ndvi_arr),0,year*year)
-					sum_yy = np.where(np.isnan(ndvi_arr),0,ndvi_arr*ndvi_arr)
-					sum_xy = np.where(np.isnan(ndvi_arr),0,year*ndvi_arr)
-				else:
-					n += np.where(np.isnan(ndvi_arr),0,1)
-					sum_x += np.where(np.isnan(ndvi_arr),0,year)
-					sum_y += np.where(np.isnan(ndvi_arr),0,ndvi_arr)
-					sum_xx += np.where(np.isnan(ndvi_arr),0,year*year)
-					sum_yy += np.where(np.isnan(ndvi_arr),0,ndvi_arr*ndvi_arr)
-					sum_xy += np.where(np.isnan(ndvi_arr),0,year*ndvi_arr)
+			with tempfile.TemporaryDirectory() as cachedir:
+				for ndvi_file in ndvi_files:
+					logger.info(ndvi_file)
+					#ndvi_bucket,ndvi_key = split_s3_path(ndvi_file)
+					#s3.download_file(ndvi_bucket,ndvi_key, f'{tmpdir}/ndvi_tmp.tif')
+					local_file = earthaccess.download(ndvi_file,local_path=cachedir,provider='LPCLOUD')
+					print(local_file)
+					ndvi_warped = gdal.Warp(f'{tmpdir}/ndvi.tif', local_file, options=warp_options)
+					ndvi_warped = None
+					ndvi_ds = gdal.Open(f'{tmpdir}/ndvi.tif')
+					ndvi_arr = ndvi_ds.GetRasterBand(1).ReadAsArray()
+					gt = ndvi_ds.GetGeoTransform()
+					wkt = ndvi_ds.GetProjectionRef()
+					xsize, ysize=ndvi_ds.RasterXSize,ndvi_ds.RasterYSize
+					ndvi_ds = None
+					#s3.download_file(ndvi_bucket,ndvi_file.replace('_VI','').replace('-VI','').replace('NDVI.tif','Fmask.tif'), f'{tmpdir}/fmask_tmp.tif',ExtraArgs={'RequestPayer': 'requester'})
+					local_file_fmask = earthaccess.download(ndvi_file.replace('_VI','').replace('-VI','').replace('NDVI.tif','Fmask.tif'),local_path=cachedir,provider='LPCLOUD')
+					print(local_file_fmask)
+					qa_warped = gdal.Warp(f'{tmpdir}/qa.tif', local_file_fmask, options=warp_options)
+					qa_warped = None
+					qa_ds = gdal.Open(f'{tmpdir}/qa.tif')
+					qa_arr = qa_ds.GetRasterBand(1).ReadAsArray()
+					qa_ds = None
+					mask = mask_hls(qa_arr,mask_list=['water','snowice'])
+					ndvi_arr = np.where((ndvi_arr == nodata) |(mask == 1),np.nan,0.0001*ndvi_arr)
+					# max_ndvi = np.fmax(max_ndvi,ndvi_arr)
+					if n is None:
+						n = np.where(np.isnan(ndvi_arr),0,1)
+						sum_x = np.where(np.isnan(ndvi_arr),0,year)
+						sum_y = np.where(np.isnan(ndvi_arr),0,ndvi_arr)
+						sum_xx = np.where(np.isnan(ndvi_arr),0,year*year)
+						sum_yy = np.where(np.isnan(ndvi_arr),0,ndvi_arr*ndvi_arr)
+						sum_xy = np.where(np.isnan(ndvi_arr),0,year*ndvi_arr)
+					else:
+						n += np.where(np.isnan(ndvi_arr),0,1)
+						sum_x += np.where(np.isnan(ndvi_arr),0,year)
+						sum_y += np.where(np.isnan(ndvi_arr),0,ndvi_arr)
+						sum_xx += np.where(np.isnan(ndvi_arr),0,year*year)
+						sum_yy += np.where(np.isnan(ndvi_arr),0,ndvi_arr*ndvi_arr)
+						sum_xy += np.where(np.isnan(ndvi_arr),0,year*ndvi_arr)
 		with np.errstate(divide='ignore', invalid='ignore'):
 			denom = (n * sum_xx) - (sum_x**2)
 			slopes = ((n * sum_xy) - (sum_x * sum_y)) / denom
@@ -220,6 +193,7 @@ def main():
 	parser.add_argument('--output',type=str,required=True)
 	parser.add_argument('--user',type=str,required=True)
 	parser.add_argument('--pwd',type=str,required=True)
+	# parser.add_argument('--token',type=str,required=True)
 	args = parser.parse_args()
 	logger.info("Username: "+os.environ.get('EARTHDATA_USERNAME'))
 	logger.info("Password: "+os.environ.get('EARTHDATA_PASSWORD'))
@@ -227,6 +201,7 @@ def main():
 	os.environ["EARTHDATA_PASSWORD"] = args.pwd
 	os.environ['AWS_REQUEST_PAYER'] = 'requester'
 	earthaccess.login()
-	boreal_ndvi_trend(args.tile,args.ys,args.ye,args.ds,args.de,args.output)
+	# s3_manager = S3AuthManager(edl_token=args.token)
+	boreal_ndvi_trend(s3_manager,args.tile,args.ys,args.ye,args.ds,args.de,args.output)
 if __name__ == '__main__':
 	main()
