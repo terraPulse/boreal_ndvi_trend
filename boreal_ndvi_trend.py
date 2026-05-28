@@ -202,6 +202,6 @@ def main():
 	os.environ['AWS_REQUEST_PAYER'] = 'requester'
 	earthaccess.login()
 	# s3_manager = S3AuthManager(edl_token=args.token)
-	boreal_ndvi_trend(s3_manager,args.tile,args.ys,args.ye,args.ds,args.de,args.output)
+	boreal_ndvi_trend(args.tile,args.ys,args.ye,args.ds,args.de,args.output)
 if __name__ == '__main__':
 	main()
