@@ -28,9 +28,13 @@ inputs:
     name: de
     required: true
   - default: ''
-    description: 'output directory' 
-    name: output
+    description: username
+    name: user
     required: true
-queue: maap-dps-worker-16gb
+  - default: ''
+    description: password
+    name: pwd
+    required: true
+queue: maap-dps-worker-8gb
 repository_url: https://github.com/terraPulse/boreal_ndvi_trend.git
 run_command: boreal_ndvi_trend/run.sh
