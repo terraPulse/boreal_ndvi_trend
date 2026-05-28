@@ -28,6 +28,14 @@ gdal.SetConfigOption('GDAL_HTTP_RETRY_DELAY', '0.5')
 gdal.SetConfigOption('GDAL_HTTP_RETRY_DELAY', '0.5')
 gdal.SetConfigOption('AWS_REQUEST_PAYER', 'requester')
 
+def split_s3_path(s3_path):
+    path_parts=s3_path.replace("s3://","").split("/")
+    bucket=path_parts.pop(0)
+    key="/".join(path_parts)
+    return bucket, key
+def s3_key_exists(client, bucket, key):
+    response = client.list_objects_v2(Bucket=bucket,Prefix=key)
+    return 'Contents' in response
 def mask_hls(qa_arr, mask_list=['water','snowice']):
 	QA_BIT = {'cirrus': 0,'cloud': 1,'adj_cloud': 2,'cloud shadow':3,'snowice':4,'water':5,'aerosol_l': 6,'aerosol_h': 7}
 	msk = np.zeros_like(qa_arr)
@@ -85,7 +93,7 @@ def boreal_ndvi_trend(tile,ys,ye,ds,de,output):
 	with tempfile.TemporaryDirectory() as tmpdir:
 		for year in range(ys,ye+1):
 			ndvi_files = get_files(bbox,f'{year}-{ds}',f'{year}-{de}')
-			max_ndvi = np.full((4000, 4000), np.nan)
+			# max_ndvi = np.full((4000, 4000), np.nan)
 			for ndvi_file in ndvi_files:
 				ndvi_bucket,ndvi_key = split_s3_path(ndvi_file)
 				s3.download_file(ndvi_bucket,ndvi_key, f'{tmpdir}/ndvi_tmp.tif',ExtraArgs={'RequestPayer': 'requester'})
@@ -106,21 +114,21 @@ def boreal_ndvi_trend(tile,ys,ye,ds,de,output):
 				qa_ds = None
 				mask = mask_hls(qa_arr,mask_list=['water','snowice'])
 				ndvi_arr = np.where((ndvi_arr == nodata) |(mask == 1),np.nan,0.0001*ndvi_arr)
-				max_ndvi = np.fmax(max_ndvi,ndvi_arr)
-			if n is None:
-				n = np.where(np.isnan(max_ndvi),0,1)
-				sum_x = np.where(np.isnan(max_ndvi),0,year)
-				sum_y = np.where(np.isnan(max_ndvi),0,max_ndvi)
-				sum_xx = np.where(np.isnan(max_ndvi),0,year*year)
-				sum_yy = np.where(np.isnan(max_ndvi),0,max_ndvi*max_ndvi)
-				sum_xy = np.where(np.isnan(max_ndvi),0,year*max_ndvi)
-			else:
-				n += np.where(np.isnan(max_ndvi),0,1)
-				sum_x += np.where(np.isnan(max_ndvi),0,year)
-				sum_y += np.where(np.isnan(max_ndvi),0,max_ndvi)
-				sum_xx += np.where(np.isnan(max_ndvi),0,year*year)
-				sum_yy += np.where(np.isnan(max_ndvi),0,max_ndvi*max_ndvi)
-				sum_xy += np.where(np.isnan(max_ndvi),0,year*max_ndvi)
+				# max_ndvi = np.fmax(max_ndvi,ndvi_arr)
+				if n is None:
+					n = np.where(np.isnan(ndvi_arr),0,1)
+					sum_x = np.where(np.isnan(ndvi_arr),0,year)
+					sum_y = np.where(np.isnan(ndvi_arr),0,ndvi_arr)
+					sum_xx = np.where(np.isnan(ndvi_arr),0,year*year)
+					sum_yy = np.where(np.isnan(ndvi_arr),0,ndvi_arr*ndvi_arr)
+					sum_xy = np.where(np.isnan(ndvi_arr),0,year*ndvi_arr)
+				else:
+					n += np.where(np.isnan(ndvi_arr),0,1)
+					sum_x += np.where(np.isnan(ndvi_arr),0,year)
+					sum_y += np.where(np.isnan(ndvi_arr),0,ndvi_arr)
+					sum_xx += np.where(np.isnan(ndvi_arr),0,year*year)
+					sum_yy += np.where(np.isnan(ndvi_arr),0,ndvi_arr*ndvi_arr)
+					sum_xy += np.where(np.isnan(ndvi_arr),0,year*ndvi_arr)
 		with np.errstate(divide='ignore', invalid='ignore'):
 			denom = (n * sum_xx) - (sum_x**2)
 			slopes = ((n * sum_xy) - (sum_x * sum_y)) / denom
