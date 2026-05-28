@@ -87,7 +87,7 @@ def boreal_ndvi_trend(tile,ys,ye,ds,de,output):
 			ndvi_files = get_files(bbox,f'{year}-{ds}',f'{year}-{de}')
 			max_ndvi = np.full((4000, 4000), np.nan)
 			for ndvi_file in ndvi_files:
-				# ndvi_bucket,ndvi_key = split_s3_path(ndvi_file)
+				ndvi_bucket,ndvi_key = split_s3_path(ndvi_file)
 				s3.download_file(ndvi_bucket,ndvi_key, f'{tmpdir}/ndvi_tmp.tif',ExtraArgs={'RequestPayer': 'requester'})
 				print(ndvi_file)
 				ndvi_warped = gdal.Warp(f'{tmpdir}/ndvi.tif', f'{tmpdir}/ndvi_tmp.tif', options=warp_options)
