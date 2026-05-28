@@ -57,12 +57,14 @@ def get_files(bbox, start_date, end_date):
 	for rec in results:
 		for url in rec.data_links(access='direct'):
 			if 'NDVI' in url:
-				file_list.append(url.replace('s3://','/vsis3/'))
+				# file_list.append(url.replace('s3://','/vsis3/'))
+				file_list.append(url)
 	results = earthaccess.search_data(short_name='HLSS30_VI',cloud_hosted=True,temporal = (start_date, end_date),bounding_box = bbox)
 	for rec in results:
 		for url in rec.data_links(access='direct'):
 			if 'NDVI' in url:
-				file_list.append(url.replace('s3://','/vsis3/'))
+				# file_list.append(url.replace('s3://','/vsis3/'))
+				file_list.append(url)
 	return file_list
 
 def boreal_ndvi_trend(tile,ys,ye,ds,de,output):
@@ -86,9 +88,9 @@ def boreal_ndvi_trend(tile,ys,ye,ds,de,output):
 			max_ndvi = np.full((4000, 4000), np.nan)
 			for ndvi_file in ndvi_files:
 				# ndvi_bucket,ndvi_key = split_s3_path(ndvi_file)
-				# s3.download_file(ndvi_bucket,ndvi_key, f'{tmpdir}/ndvi.tif')
+				s3.download_file(ndvi_bucket,ndvi_key, f'{tmpdir}/ndvi_tmp.tif',ExtraArgs={'RequestPayer': 'requester'})
 				print(ndvi_file)
-				ndvi_warped = gdal.Warp(f'{tmpdir}/ndvi.tif', ndvi_file, options=warp_options)
+				ndvi_warped = gdal.Warp(f'{tmpdir}/ndvi.tif', f'{tmpdir}/ndvi_tmp.tif', options=warp_options)
 				ndvi_warped = None
 				ndvi_ds = gdal.Open(f'{tmpdir}/ndvi.tif')
 				ndvi_arr = ndvi_ds.GetRasterBand(1).ReadAsArray()
@@ -96,8 +98,8 @@ def boreal_ndvi_trend(tile,ys,ye,ds,de,output):
 				wkt = ndvi_ds.GetProjectionRef()
 				xsize, ysize=ndvi_ds.RasterXSize,ndvi_ds.RasterYSize
 				ndvi_ds = None
-				# s3.download_file(ndvi_bucket,ndvi_file.replace('_VI','').replace('-VI','').replace('NDVI.tif','Fmask.tif'), f'{tmpdir}/fmask.tif')
-				qa_warped = gdal.Warp(f'{tmpdir}/qa.tif', ndvi_file.replace('_VI','').replace('-VI','').replace('NDVI.tif','Fmask.tif'), options=warp_options)
+				s3.download_file(ndvi_bucket,ndvi_file.replace('_VI','').replace('-VI','').replace('NDVI.tif','Fmask.tif'), f'{tmpdir}/fmask_tmp.tif',ExtraArgs={'RequestPayer': 'requester'})
+				qa_warped = gdal.Warp(f'{tmpdir}/qa.tif', f'{tmpdir}/fmask_tmp.tif', options=warp_options)
 				qa_warped = None
 				qa_ds = gdal.Open(f'{tmpdir}/qa.tif')
 				qa_arr = qa_ds.GetRasterBand(1).ReadAsArray()
