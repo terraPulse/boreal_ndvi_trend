@@ -8,3 +8,4 @@ dependencies:
   - gdal
   - scipy
   - boto3
+  - pystac-client
