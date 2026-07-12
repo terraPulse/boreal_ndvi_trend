@@ -140,7 +140,6 @@ def index_setup(tile,indices,output):
 							band.SetNoDataValue(nodata)
 							band.FlushCache()
 							del output_ds
-							output_bucket,output_key = split_s3_path(output)
 							shutil.copyfile(f'{tmpdir}/si.tif',f'{output}/{tile}_{year}_{id}_{si}.tif')
 
 		
