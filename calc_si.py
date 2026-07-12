@@ -22,7 +22,9 @@ gdal.SetConfigOption('GDAL_HTTP_MAX_RETRY', '10')
 gdal.SetConfigOption('GDAL_HTTP_RETRY_DELAY', '0.5')
 gdal.SetConfigOption('GDAL_HTTP_RETRY_DELAY', '0.5')
 gdal.SetConfigOption('AWS_REQUEST_PAYER', 'requester')
-os.environ["AWS_REQUEST_PAYER"] = "requester"
+os.environ['AWS_REQUEST_PAYER'] = 'requester'
+os.environ['CPL_VSIL_CURL_NON_CACHED'] = '/vsis3/'
+os.environ['GDAL_MAX_DATASET_POOL_SIZE'] = '4000'
 
 def split_s3_path(s3_path):
 	path_parts=s3_path.replace("s3://","").split("/")
