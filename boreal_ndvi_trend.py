@@ -10,6 +10,9 @@ import tempfile
 import logging
 import shutil
 import os
+os.environ['AWS_REQUEST_PAYER'] = 'requester'
+os.environ['CPL_VSIL_CURL_NON_CACHED'] = '/vsis3/'
+os.environ['GDAL_MAX_DATASET_POOL_SIZE'] = '4000'
 # from maap.maap import MAAP
 # from boto3 import Session
 import boto3
@@ -25,7 +28,6 @@ gdal.SetConfigOption('GDAL_DISABLE_READDIR_ON_OPEN','EMPTY_DIR')
 gdal.SetConfigOption('CPL_VSIL_CURL_ALLOWED_EXTENSIONS','TIF')
 gdal.SetConfigOption('GDAL_HTTP_UNSAFESSL', 'YES')
 gdal.SetConfigOption('GDAL_HTTP_MAX_RETRY', '10')
-gdal.SetConfigOption('GDAL_HTTP_RETRY_DELAY', '0.5')
 gdal.SetConfigOption('GDAL_HTTP_RETRY_DELAY', '0.5')
 gdal.SetConfigOption('AWS_REQUEST_PAYER', 'requester')
 
@@ -194,15 +196,17 @@ def main():
 	parser.add_argument('--ds',type=str,required=True)
 	parser.add_argument('--de',type=str,required=True)
 	parser.add_argument('--output',type=str,required=True)
+	parser.add_argument('--mode',type=str,required=True)
 	parser.add_argument('--user',type=str,required=True)
 	parser.add_argument('--pwd',type=str,required=True)
 	# parser.add_argument('--token',type=str,required=True)
+	
 	args = parser.parse_args()
-	logger.info("Username: "+os.environ.get('EARTHDATA_USERNAME'))
-	logger.info("Password: "+os.environ.get('EARTHDATA_PASSWORD'))
 	os.environ["EARTHDATA_USERNAME"] = args.user
 	os.environ["EARTHDATA_PASSWORD"] = args.pwd
-	os.environ['AWS_REQUEST_PAYER'] = 'requester'
+	logger.info("Username: "+os.environ.get('EARTHDATA_USERNAME'))
+	logger.info("Password: "+os.environ.get('EARTHDATA_PASSWORD'))
+	
 	earthaccess.login()
 	# s3_manager = S3AuthManager(edl_token=args.token)
 	boreal_ndvi_trend(args.tile,args.ys,args.ye,args.ds,args.de,args.output)
