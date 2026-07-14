@@ -199,7 +199,7 @@ def boreal_si_trend(tile,ys,ye,ds,de,output,si,mode):
 			band.SetNoDataValue(nodata)
 			band.FlushCache()
 			del output_ds
-			n = n.astype(uint16)
+			n = n.astype('uint16')
 			driver = gdal.GetDriverByName('GTiff')
 			output_ds = driver.Create(f'{tmpdir}/{tile}_num.tif', xsize,ysize, 1, gdal.GDT_UInt16, options=['COMPRESS=LZW','TILED=YES','COPY_SRC_OVERVIEWS=YES','BIGTIFF=YES'])
 			output_ds.SetGeoTransform(gt)
