@@ -207,7 +207,7 @@ def boreal_si_trend(tile,ys,ye,ds,de,output,si,mode):
 			output_ds.SetProjection(wkt)
 			band = output_ds.GetRasterBand(1)
 			band.WriteArray(n)
-			band.SetNoDataValue(nodata)
+			band.SetNoDataValue(0)
 			band.FlushCache()
 			del output_ds
 			logger.info("Copying files")
