@@ -83,7 +83,7 @@ def get_files_lc2(tile,year,si):
 	prod_ids = list(set(df_tile['prod_id'].tolist()))
 	file_list = []
 	for prod_id in prod_ids:
-		file_list.append(df_tile[(df_tile['prod_id'] == prod_id)]['fille'].tolist()[0])
+		file_list.append(df_tile[(df_tile['prod_id'] == prod_id)]['file'].tolist()[0])
 	return file_list
 
 def boreal_si_trend(tile,ys,ye,ds,de,output,si,mode):
