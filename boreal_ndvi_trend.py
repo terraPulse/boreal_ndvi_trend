@@ -210,10 +210,10 @@ def boreal_si_trend(tile,ys,ye,ds,de,output,si,mode):
 			band.FlushCache()
 			del output_ds
 			logger.info("Copying files")
-			shutil.copyfile(f'{tmpdir}/{tile}_slope.tif',f'{output}/{tile}_{si}_slope.tif')
-			shutil.copyfile(f'{tmpdir}/{tile}_intercept.tif',f'{output}/{tile}_{si}_intercept.tif')
-			shutil.copyfile(f'{tmpdir}/{tile}_pval.tif',f'{output}/{tile}_{si}_pval.tif')
-			shutil.copyfile(f'{tmpdir}/{tile}_num.tif',f'{output}/{tile}_{si}_num.tif')
+			shutil.copyfile(f'{tmpdir}/{tile}_slope.tif',f'{output}/{tile}_{mode}_{si}_slope.tif')
+			shutil.copyfile(f'{tmpdir}/{tile}_intercept.tif',f'{output}/{tile}_{mode}_{si}_intercept.tif')
+			shutil.copyfile(f'{tmpdir}/{tile}_pval.tif',f'{output}/{tile}_{mode}_{si}_pval.tif')
+			shutil.copyfile(f'{tmpdir}/{tile}_num.tif',f'{output}/{tile}_{mode}_{si}_num.tif')
 			
 
 def main():
