@@ -86,134 +86,135 @@ def get_files_lc2(tile,year,si):
 		file_list.append(df_tile[(df_tile['prod_id'] == prod_id)]['file'].tolist()[0])
 	return file_list
 
-def boreal_si_trend(tile,ys,ye,ds,de,output,si,mode):
+def boreal_si_trend(tile,ys,ye,ds,de,output,indices,mode):
 	bbox = tile_bounds(tile)
-	gt = None
-	wkt = None
-	xsize = None
-	ysize = None
-	n = None
-	sum_x = None
-	sum_y = None
-	sum_xx = None
-	sum_yy = None
-	sum_xy = None
 	nodata = -19999
 	warp_options = gdal.WarpOptions(xRes=0.00025,yRes=0.00025,dstSRS='EPSG:4326',outputBounds=bbox,targetAlignedPixels=True)
-	with tempfile.TemporaryDirectory() as tmpdir:
-		for year in range(ys,ye+1):
-			if mode == 'hls':
-				si_files = get_files(bbox,f'{year}-{ds}',f'{year}-{de}',si)
-			elif mode == 'lc2':
-				si_files = get_files_lc2(tile,year,si)
-			with tempfile.TemporaryDirectory() as cachedir:
-				for si_file in si_files:
-					logger.info(si_file)
-					si_arr = None
-					try:
-						if mode == 'hls':
-							local_file = earthaccess.download(si_file,local_path=cachedir,provider='LPCLOUD')
-							logger.info(local_file)
-							si_warped = gdal.Warp(f'{tmpdir}/si.tif', local_file, options=warp_options)
-							si_warped = None
-							si_ds = gdal.Open(f'{tmpdir}/si.tif')
-							si_arr = si_ds.GetRasterBand(1).ReadAsArray()
-							gt = si_ds.GetGeoTransform()
-							wkt = si_ds.GetProjectionRef()
-							xsize, ysize=si_ds.RasterXSize,si_ds.RasterYSize
-							si_ds = None
-							local_file_fmask = earthaccess.download(si_file.replace('_VI','').replace('-VI','').replace(f'{si.upper()}.tif','Fmask.tif'),local_path=cachedir,provider='LPCLOUD')
-							logger.info(local_file_fmask)
-							qa_warped = gdal.Warp(f'{tmpdir}/qa.tif', local_file_fmask, options=warp_options)
-							qa_warped = None
-							qa_ds = gdal.Open(f'{tmpdir}/qa.tif')
-							qa_arr = qa_ds.GetRasterBand(1).ReadAsArray()
-							qa_ds = None
-							mask = mask_hls(qa_arr,mask_list=['cloud','adj_cloud','water','snowice'])
-							si_arr = np.where((si_arr == nodata) |(mask == 1),np.nan,0.0001*si_arr)
-						elif mode == 'lc2':
-							si_ds = gdal.Open(si_file)
-							si_arr = si_ds.GetRasterBand(1).ReadAsArray()
-							gt = si_ds.GetGeoTransform()
-							wkt = si_ds.GetProjectionRef()
-							xsize, ysize=si_ds.RasterXSize,si_ds.RasterYSize
-							si_ds = None
-							si_arr = np.where(si_arr == nodata,np.nan,0.0001*si_arr)
-						if n is None:
-							n = np.where(np.isnan(si_arr),0,1)
-							sum_x = np.where(np.isnan(si_arr),0,year)
-							sum_y = np.where(np.isnan(si_arr),0,si_arr)
-							sum_xx = np.where(np.isnan(si_arr),0,year*year)
-							sum_yy = np.where(np.isnan(si_arr),0,si_arr*si_arr)
-							sum_xy = np.where(np.isnan(si_arr),0,year*si_arr)
-						else:
-							n += np.where(np.isnan(si_arr),0,1)
-							sum_x += np.where(np.isnan(si_arr),0,year)
-							sum_y += np.where(np.isnan(si_arr),0,si_arr)
-							sum_xx += np.where(np.isnan(si_arr),0,year*year)
-							sum_yy += np.where(np.isnan(si_arr),0,si_arr*si_arr)
-							sum_xy += np.where(np.isnan(si_arr),0,year*si_arr)
-					except Exception as e:
-						logger.info(f'Error processing {si_file}: {e}')
-		with np.errstate(divide='ignore', invalid='ignore'):
-			denom = (n * sum_xx) - (sum_x**2)
-			slopes = ((n * sum_xy) - (sum_x * sum_y)) / denom
-			intercepts = (sum_y - slopes * sum_x) / n
-			s_xx = sum_xx - (sum_x**2 / n)
-			s_yy = sum_yy - (sum_y**2 / n)
-			s_xy = sum_xy - (sum_x * sum_y / n)
-			rss = np.maximum(s_yy - (s_xy**2 / s_xx), 0)
-			df = n - 2
-			s_err = np.sqrt(rss / df)
-			se_slope = s_err / np.sqrt(s_xx)
-			t_stats = slopes / se_slope
-			p_values = stats.t.sf(np.abs(t_stats), df) * 2
-			slopes[(n < 2) | np.isnan(slopes)] = nodata
-			intercepts[(n < 2) | np.isnan(intercepts)] = nodata
-			p_values[(n < 2) | np.isnan(p_values)] = nodata
-
-			driver = gdal.GetDriverByName('GTiff')
-			output_ds = driver.Create(f'{tmpdir}/{tile}_slope.tif', xsize,ysize, 1, gdal.GDT_Float32, options=['COMPRESS=LZW','TILED=YES','COPY_SRC_OVERVIEWS=YES','BIGTIFF=YES'])
-			output_ds.SetGeoTransform(gt)
-			output_ds.SetProjection(wkt)
-			band = output_ds.GetRasterBand(1)
-			band.WriteArray(slopes)
-			band.SetNoDataValue(nodata)
-			band.FlushCache()
-			del output_ds
-			driver = gdal.GetDriverByName('GTiff')
-			output_ds = driver.Create(f'{tmpdir}/{tile}_intercept.tif', xsize,ysize, 1, gdal.GDT_Float32, options=['COMPRESS=LZW','TILED=YES','COPY_SRC_OVERVIEWS=YES','BIGTIFF=YES'])
-			output_ds.SetGeoTransform(gt)
-			output_ds.SetProjection(wkt)
-			band = output_ds.GetRasterBand(1)
-			band.WriteArray(intercepts)
-			band.SetNoDataValue(nodata)
-			band.FlushCache()
-			del output_ds
-			driver = gdal.GetDriverByName('GTiff')
-			output_ds = driver.Create(f'{tmpdir}/{tile}_pval.tif', xsize,ysize, 1, gdal.GDT_Float32, options=['COMPRESS=LZW','TILED=YES','COPY_SRC_OVERVIEWS=YES','BIGTIFF=YES'])
-			output_ds.SetGeoTransform(gt)
-			output_ds.SetProjection(wkt)
-			band = output_ds.GetRasterBand(1)
-			band.WriteArray(p_values)
-			band.SetNoDataValue(nodata)
-			band.FlushCache()
-			del output_ds
-			n = n.astype('uint16')
-			driver = gdal.GetDriverByName('GTiff')
-			output_ds = driver.Create(f'{tmpdir}/{tile}_num.tif', xsize,ysize, 1, gdal.GDT_UInt16, options=['COMPRESS=LZW','TILED=YES','COPY_SRC_OVERVIEWS=YES','BIGTIFF=YES'])
-			output_ds.SetGeoTransform(gt)
-			output_ds.SetProjection(wkt)
-			band = output_ds.GetRasterBand(1)
-			band.WriteArray(n)
-			band.SetNoDataValue(0)
-			band.FlushCache()
-			del output_ds
-			logger.info("Copying files")
-			shutil.copyfile(f'{tmpdir}/{tile}_slope.tif',f'{output}/{tile}_{mode}_{si}_slope.tif')
-			shutil.copyfile(f'{tmpdir}/{tile}_intercept.tif',f'{output}/{tile}_{mode}_{si}_intercept.tif')
-			shutil.copyfile(f'{tmpdir}/{tile}_pval.tif',f'{output}/{tile}_{mode}_{si}_pval.tif')
-			shutil.copyfile(f'{tmpdir}/{tile}_num.tif',f'{output}/{tile}_{mode}_{si}_num.tif')
+	for si in indices:
+		gt = None
+		wkt = None
+		xsize = None
+		ysize = None
+		n = None
+		sum_x = None
+		sum_y = None
+		sum_xx = None
+		sum_yy = None
+		sum_xy = None
+		with tempfile.TemporaryDirectory() as tmpdir:
+			for year in range(ys,ye+1):
+				if mode == 'hls':
+					si_files = get_files(bbox,f'{year}-{ds}',f'{year}-{de}',si)
+				elif mode == 'lc2':
+					si_files = get_files_lc2(tile,year,si)
+				with tempfile.TemporaryDirectory() as cachedir:
+					for si_file in si_files:
+						logger.info(si_file)
+						si_arr = None
+						try:
+							if mode == 'hls':
+								local_file = earthaccess.download(si_file,local_path=cachedir,provider='LPCLOUD')
+								logger.info(local_file)
+								si_warped = gdal.Warp(f'{tmpdir}/si.tif', local_file, options=warp_options)
+								si_warped = None
+								si_ds = gdal.Open(f'{tmpdir}/si.tif')
+								si_arr = si_ds.GetRasterBand(1).ReadAsArray()
+								gt = si_ds.GetGeoTransform()
+								wkt = si_ds.GetProjectionRef()
+								xsize, ysize=si_ds.RasterXSize,si_ds.RasterYSize
+								si_ds = None
+								local_file_fmask = earthaccess.download(si_file.replace('_VI','').replace('-VI','').replace(f'{si.upper()}.tif','Fmask.tif'),local_path=cachedir,provider='LPCLOUD')
+								logger.info(local_file_fmask)
+								qa_warped = gdal.Warp(f'{tmpdir}/qa.tif', local_file_fmask, options=warp_options)
+								qa_warped = None
+								qa_ds = gdal.Open(f'{tmpdir}/qa.tif')
+								qa_arr = qa_ds.GetRasterBand(1).ReadAsArray()
+								qa_ds = None
+								mask = mask_hls(qa_arr,mask_list=['cloud','adj_cloud','water','snowice'])
+								si_arr = np.where((si_arr == nodata) |(mask == 1),np.nan,0.0001*si_arr)
+							elif mode == 'lc2':
+								si_ds = gdal.Open(si_file)
+								si_arr = si_ds.GetRasterBand(1).ReadAsArray()
+								gt = si_ds.GetGeoTransform()
+								wkt = si_ds.GetProjectionRef()
+								xsize, ysize=si_ds.RasterXSize,si_ds.RasterYSize
+								si_ds = None
+								si_arr = np.where(si_arr == nodata,np.nan,0.0001*si_arr)
+							if n is None:
+								n = np.where(np.isnan(si_arr),0,1)
+								sum_x = np.where(np.isnan(si_arr),0,year)
+								sum_y = np.where(np.isnan(si_arr),0,si_arr)
+								sum_xx = np.where(np.isnan(si_arr),0,year*year)
+								sum_yy = np.where(np.isnan(si_arr),0,si_arr*si_arr)
+								sum_xy = np.where(np.isnan(si_arr),0,year*si_arr)
+							else:
+								n += np.where(np.isnan(si_arr),0,1)
+								sum_x += np.where(np.isnan(si_arr),0,year)
+								sum_y += np.where(np.isnan(si_arr),0,si_arr)
+								sum_xx += np.where(np.isnan(si_arr),0,year*year)
+								sum_yy += np.where(np.isnan(si_arr),0,si_arr*si_arr)
+								sum_xy += np.where(np.isnan(si_arr),0,year*si_arr)
+						except Exception as e:
+							logger.info(f'Error processing {si_file}: {e}')
+			with np.errstate(divide='ignore', invalid='ignore'):
+				denom = (n * sum_xx) - (sum_x**2)
+				slopes = ((n * sum_xy) - (sum_x * sum_y)) / denom
+				intercepts = (sum_y - slopes * sum_x) / n
+				s_xx = sum_xx - (sum_x**2 / n)
+				s_yy = sum_yy - (sum_y**2 / n)
+				s_xy = sum_xy - (sum_x * sum_y / n)
+				rss = np.maximum(s_yy - (s_xy**2 / s_xx), 0)
+				df = n - 2
+				s_err = np.sqrt(rss / df)
+				se_slope = s_err / np.sqrt(s_xx)
+				t_stats = slopes / se_slope
+				p_values = stats.t.sf(np.abs(t_stats), df) * 2
+				slopes[(n < 2) | np.isnan(slopes)] = nodata
+				intercepts[(n < 2) | np.isnan(intercepts)] = nodata
+				p_values[(n < 2) | np.isnan(p_values)] = nodata
+	
+				driver = gdal.GetDriverByName('GTiff')
+				output_ds = driver.Create(f'{tmpdir}/{tile}_slope.tif', xsize,ysize, 1, gdal.GDT_Float32, options=['COMPRESS=LZW','TILED=YES','COPY_SRC_OVERVIEWS=YES','BIGTIFF=YES'])
+				output_ds.SetGeoTransform(gt)
+				output_ds.SetProjection(wkt)
+				band = output_ds.GetRasterBand(1)
+				band.WriteArray(slopes)
+				band.SetNoDataValue(nodata)
+				band.FlushCache()
+				del output_ds
+				driver = gdal.GetDriverByName('GTiff')
+				output_ds = driver.Create(f'{tmpdir}/{tile}_intercept.tif', xsize,ysize, 1, gdal.GDT_Float32, options=['COMPRESS=LZW','TILED=YES','COPY_SRC_OVERVIEWS=YES','BIGTIFF=YES'])
+				output_ds.SetGeoTransform(gt)
+				output_ds.SetProjection(wkt)
+				band = output_ds.GetRasterBand(1)
+				band.WriteArray(intercepts)
+				band.SetNoDataValue(nodata)
+				band.FlushCache()
+				del output_ds
+				driver = gdal.GetDriverByName('GTiff')
+				output_ds = driver.Create(f'{tmpdir}/{tile}_pval.tif', xsize,ysize, 1, gdal.GDT_Float32, options=['COMPRESS=LZW','TILED=YES','COPY_SRC_OVERVIEWS=YES','BIGTIFF=YES'])
+				output_ds.SetGeoTransform(gt)
+				output_ds.SetProjection(wkt)
+				band = output_ds.GetRasterBand(1)
+				band.WriteArray(p_values)
+				band.SetNoDataValue(nodata)
+				band.FlushCache()
+				del output_ds
+				n = n.astype('uint16')
+				driver = gdal.GetDriverByName('GTiff')
+				output_ds = driver.Create(f'{tmpdir}/{tile}_num.tif', xsize,ysize, 1, gdal.GDT_UInt16, options=['COMPRESS=LZW','TILED=YES','COPY_SRC_OVERVIEWS=YES','BIGTIFF=YES'])
+				output_ds.SetGeoTransform(gt)
+				output_ds.SetProjection(wkt)
+				band = output_ds.GetRasterBand(1)
+				band.WriteArray(n)
+				band.SetNoDataValue(0)
+				band.FlushCache()
+				del output_ds
+				logger.info("Copying files")
+				shutil.copyfile(f'{tmpdir}/{tile}_slope.tif',f'{output}/{tile}_{mode}_{si}_slope.tif')
+				shutil.copyfile(f'{tmpdir}/{tile}_intercept.tif',f'{output}/{tile}_{mode}_{si}_intercept.tif')
+				shutil.copyfile(f'{tmpdir}/{tile}_pval.tif',f'{output}/{tile}_{mode}_{si}_pval.tif')
+				shutil.copyfile(f'{tmpdir}/{tile}_num.tif',f'{output}/{tile}_{mode}_{si}_num.tif')
 			
 
 def main():
@@ -225,7 +226,7 @@ def main():
 	parser.add_argument('--ds',type=str,required=True)
 	parser.add_argument('--de',type=str,required=True)
 	parser.add_argument('--output',type=str,required=True)
-	parser.add_argument('--si',type=str,required=True)
+	parser.add_argument('--indices',type=str,required=False,default='ndvi,evi,savi,msavi,ndwi,ndmi,nbr2,tvi')
 	parser.add_argument('--mode',type=str,required=True)
 	parser.add_argument('--user',type=str,required=True)
 	parser.add_argument('--pwd',type=str,required=True)
@@ -238,6 +239,6 @@ def main():
 	logger.info("Password: "+os.environ.get('EARTHDATA_PASSWORD'))
 	
 	earthaccess.login()
-	boreal_si_trend(args.tile,args.ys,args.ye,args.ds,args.de,args.output,args.si,args.mode)
+	boreal_si_trend(args.tile,args.ys,args.ye,args.ds,args.de,args.output,args.indices,args.mode)
 if __name__ == '__main__':
 	main()
