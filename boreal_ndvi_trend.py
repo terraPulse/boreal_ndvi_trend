@@ -1,6 +1,5 @@
 import numpy as np
 from osgeo import gdal
-import geopandas as gpd
 import pandas as pd
 from datetime import datetime
 import time
