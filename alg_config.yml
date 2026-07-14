@@ -1,31 +1,40 @@
 algorithm_description: Process Boreal HLS NDVI Temporal Trend
 algorithm_name: boreal_ndvi_trend
-algorithm_version: v0.1
+algorithm_version: main
 build_command: boreal_ndvi_trend/build_env.sh
-disk_space: 20GB
+disk_space: 30GB
 docker_container_url: mas.maap-project.org/root/maap-workspaces/custom_images/maap_base:v5.0.0
 inputs:
   config: []
+  file: []
   positional:
   - default: ''
-    description: 'tile'
+    description: tile
     name: tile
     required: true
   - default: ''
-    description: 'Start year'
+    description: Start year
     name: ys
     required: true
   - default: ''
-    description: 'End year'
+    description: End year
     name: ye
     required: true
   - default: ''
-    description: 'Start date in MM-DD format (e.g. 06-01)'
+    description: Start date in MM-DD format (e.g. 06-01)
     name: ds
     required: true
   - default: ''
-    description: 'End date in MM-DD format (e.g. 09-30)' 
+    description: End date in MM-DD format (e.g. 06-01)
     name: de
+    required: true
+  - default: ''
+    description: spectral index name (e.g. ndvi, evi, ...)
+    name: si
+    required: true
+  - default: ''
+    description: hls or lc2
+    name: mode
     required: true
   - default: ''
     description: username
