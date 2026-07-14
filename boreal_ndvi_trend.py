@@ -90,6 +90,7 @@ def boreal_si_trend(tile,ys,ye,ds,de,output,indices,mode):
 	bbox = tile_bounds(tile)
 	nodata = -19999
 	warp_options = gdal.WarpOptions(xRes=0.00025,yRes=0.00025,dstSRS='EPSG:4326',outputBounds=bbox,targetAlignedPixels=True)
+	indices = indices.split(',')
 	for si in indices:
 		gt = None
 		wkt = None
