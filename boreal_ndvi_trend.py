@@ -1,6 +1,7 @@
 import numpy as np
 from osgeo import gdal
 import geopandas as gpd
+import pandas as pd
 from datetime import datetime
 import time
 from scipy import stats
@@ -19,7 +20,7 @@ import boto3
 import requests
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(name)s - %(message)s")
-logger = logging.getLogger("boreal_ndvi_trend")
+logger = logging.getLogger("boreal_si_trend")
 # maap = MAAP()
 # GDAL configurations used to successfully access LP DAAC Cloud Assets via vsicurl 
 gdal.SetConfigOption('GDAL_HTTP_COOKIEFILE','~/cookies.txt')
@@ -39,7 +40,7 @@ def split_s3_path(s3_path):
 def s3_key_exists(client, bucket, key):
     response = client.list_objects_v2(Bucket=bucket,Prefix=key)
     return 'Contents' in response
-def mask_hls(qa_arr, mask_list=['water','snowice']):
+def mask_hls(qa_arr, mask_list=['cloud','adj_cloud','water','snowice']):
 	QA_BIT = {'cirrus': 0,'cloud': 1,'adj_cloud': 2,'cloud shadow':3,'snowice':4,'water':5,'aerosol_l': 6,'aerosol_h': 7}
 	msk = np.zeros_like(qa_arr)
 	for m in mask_list:
@@ -62,21 +63,31 @@ def tile_bounds(tile):
 	xmax = xmin+1.0
 	ymin = ymax-1.0
 	return (xmin,ymin,xmax,ymax)
-def get_files(bbox, start_date, end_date):
+def get_files(bbox, start_date, end_date,si):
 	file_list = []
 	results = earthaccess.search_data(short_name='HLSL30_VI',cloud_hosted=True,temporal = (start_date, end_date),bounding_box = bbox)
 	for rec in results:
 		for url in rec.data_links(access='direct'):
-			if 'NDVI' in url:
+			if f'{si.upper()}.tif' in url:
 				file_list.append(url)
 	results = earthaccess.search_data(short_name='HLSS30_VI',cloud_hosted=True,temporal = (start_date, end_date),bounding_box = bbox)
 	for rec in results:
 		for url in rec.data_links(access='direct'):
-			if 'NDVI' in url:
+			if f'{si.upper()}.tif' in url:
 				file_list.append(url)
 	return file_list
+def get_files_lc2(tile,year,si):
+	s3_client = boto3.client('s3')
+	response = s3_client.get_object(Bucket='maap-ops-workspace', Key=f'pswang/dps_output/boreal_si/{si}_list.csv')
+	df = pd.read_csv(response['Body'])
+	df_tile = df[(df['tile'] == tile) & (df['year'] == year)]
+	prod_ids = list(set(df_tile['prod_id'].tolist()))
+	file_list = []
+	for prod_id in prod_ids:
+		file_list.append(df_tile[(df_tile['prod_id'] == prod_id)]['fille'].tolist()[0])
+	return file_list
 
-def boreal_ndvi_trend(tile,ys,ye,ds,de,output):
+def boreal_si_trend(tile,ys,ye,ds,de,output,si,mode):
 	bbox = tile_bounds(tile)
 	gt = None
 	wkt = None
@@ -92,51 +103,59 @@ def boreal_ndvi_trend(tile,ys,ye,ds,de,output):
 	warp_options = gdal.WarpOptions(xRes=0.00025,yRes=0.00025,dstSRS='EPSG:4326',outputBounds=bbox,targetAlignedPixels=True)
 	with tempfile.TemporaryDirectory() as tmpdir:
 		for year in range(ys,ye+1):
-			ndvi_files = get_files(bbox,f'{year}-{ds}',f'{year}-{de}')
-			# max_ndvi = np.full((4000, 4000), np.nan)
+			if mode == 'hls':
+				si_files = get_files(bbox,f'{year}-{ds}',f'{year}-{de}',si)
+			elif mode == 'lc2':
+				si_files = get_files_lc2(tile,year,si)
 			with tempfile.TemporaryDirectory() as cachedir:
-				for ndvi_file in ndvi_files:
-					logger.info(ndvi_file)
-					#ndvi_bucket,ndvi_key = split_s3_path(ndvi_file)
-					#s3.download_file(ndvi_bucket,ndvi_key, f'{tmpdir}/ndvi_tmp.tif')
+				for si_file in si_files:
+					logger.info(si_file)
+					si_arr = None
 					try:
-						local_file = earthaccess.download(ndvi_file,local_path=cachedir,provider='LPCLOUD')
-						print(local_file)
-						ndvi_warped = gdal.Warp(f'{tmpdir}/ndvi.tif', local_file, options=warp_options)
-						ndvi_warped = None
-						ndvi_ds = gdal.Open(f'{tmpdir}/ndvi.tif')
-						ndvi_arr = ndvi_ds.GetRasterBand(1).ReadAsArray()
-						gt = ndvi_ds.GetGeoTransform()
-						wkt = ndvi_ds.GetProjectionRef()
-						xsize, ysize=ndvi_ds.RasterXSize,ndvi_ds.RasterYSize
-						ndvi_ds = None
-						#s3.download_file(ndvi_bucket,ndvi_file.replace('_VI','').replace('-VI','').replace('NDVI.tif','Fmask.tif'), f'{tmpdir}/fmask_tmp.tif',ExtraArgs={'RequestPayer': 'requester'})
-						local_file_fmask = earthaccess.download(ndvi_file.replace('_VI','').replace('-VI','').replace('NDVI.tif','Fmask.tif'),local_path=cachedir,provider='LPCLOUD')
-						print(local_file_fmask)
-						qa_warped = gdal.Warp(f'{tmpdir}/qa.tif', local_file_fmask, options=warp_options)
-						qa_warped = None
-						qa_ds = gdal.Open(f'{tmpdir}/qa.tif')
-						qa_arr = qa_ds.GetRasterBand(1).ReadAsArray()
-						qa_ds = None
-						mask = mask_hls(qa_arr,mask_list=['water','snowice'])
-						ndvi_arr = np.where((ndvi_arr == nodata) |(mask == 1),np.nan,0.0001*ndvi_arr)
-						# max_ndvi = np.fmax(max_ndvi,ndvi_arr)
+						if mode == 'hls':
+							local_file = earthaccess.download(si_file,local_path=cachedir,provider='LPCLOUD')
+							logger.info(local_file)
+							si_warped = gdal.Warp(f'{tmpdir}/si.tif', local_file, options=warp_options)
+							si_warped = None
+							si_ds = gdal.Open(f'{tmpdir}/si.tif')
+							si_arr = si_ds.GetRasterBand(1).ReadAsArray()
+							gt = si_ds.GetGeoTransform()
+							wkt = si_ds.GetProjectionRef()
+							xsize, ysize=si_ds.RasterXSize,si_ds.RasterYSize
+							si_ds = None
+							local_file_fmask = earthaccess.download(si_file.replace('_VI','').replace('-VI','').replace(f'{si.upper()}.tif','Fmask.tif'),local_path=cachedir,provider='LPCLOUD')
+							logger.info(local_file_fmask)
+							qa_warped = gdal.Warp(f'{tmpdir}/qa.tif', local_file_fmask, options=warp_options)
+							qa_warped = None
+							qa_ds = gdal.Open(f'{tmpdir}/qa.tif')
+							qa_arr = qa_ds.GetRasterBand(1).ReadAsArray()
+							qa_ds = None
+							mask = mask_hls(qa_arr,mask_list=['cloud','adj_cloud','water','snowice'])
+							si_arr = np.where((si_arr == nodata) |(mask == 1),np.nan,0.0001*si_arr)
+						elif mode == 'lc2':
+							si_ds = gdal.Open(si_file)
+							si_arr = si_ds.GetRasterBand(1).ReadAsArray()
+							gt = si_ds.GetGeoTransform()
+							wkt = si_ds.GetProjectionRef()
+							xsize, ysize=si_ds.RasterXSize,si_ds.RasterYSize
+							si_ds = None
+							si_arr = np.where(si_arr == nodata,np.nan,0.0001*si_arr)
 						if n is None:
-							n = np.where(np.isnan(ndvi_arr),0,1)
-							sum_x = np.where(np.isnan(ndvi_arr),0,year)
-							sum_y = np.where(np.isnan(ndvi_arr),0,ndvi_arr)
-							sum_xx = np.where(np.isnan(ndvi_arr),0,year*year)
-							sum_yy = np.where(np.isnan(ndvi_arr),0,ndvi_arr*ndvi_arr)
-							sum_xy = np.where(np.isnan(ndvi_arr),0,year*ndvi_arr)
+							n = np.where(np.isnan(si_arr),0,1)
+							sum_x = np.where(np.isnan(si_arr),0,year)
+							sum_y = np.where(np.isnan(si_arr),0,si_arr)
+							sum_xx = np.where(np.isnan(si_arr),0,year*year)
+							sum_yy = np.where(np.isnan(si_arr),0,si_arr*si_arr)
+							sum_xy = np.where(np.isnan(si_arr),0,year*si_arr)
 						else:
-							n += np.where(np.isnan(ndvi_arr),0,1)
-							sum_x += np.where(np.isnan(ndvi_arr),0,year)
-							sum_y += np.where(np.isnan(ndvi_arr),0,ndvi_arr)
-							sum_xx += np.where(np.isnan(ndvi_arr),0,year*year)
-							sum_yy += np.where(np.isnan(ndvi_arr),0,ndvi_arr*ndvi_arr)
-							sum_xy += np.where(np.isnan(ndvi_arr),0,year*ndvi_arr)
+							n += np.where(np.isnan(si_arr),0,1)
+							sum_x += np.where(np.isnan(si_arr),0,year)
+							sum_y += np.where(np.isnan(si_arr),0,si_arr)
+							sum_xx += np.where(np.isnan(si_arr),0,year*year)
+							sum_yy += np.where(np.isnan(si_arr),0,si_arr*si_arr)
+							sum_xy += np.where(np.isnan(si_arr),0,year*si_arr)
 					except Exception as e:
-						logger.info(f'Error processing {ndvi_file}: {e}')
+						logger.info(f'Error processing {si_file}: {e}')
 		with np.errstate(divide='ignore', invalid='ignore'):
 			denom = (n * sum_xx) - (sum_x**2)
 			slopes = ((n * sum_xy) - (sum_x * sum_y)) / denom
@@ -181,10 +200,21 @@ def boreal_ndvi_trend(tile,ys,ye,ds,de,output):
 			band.SetNoDataValue(nodata)
 			band.FlushCache()
 			del output_ds
+			n = n.astype(uint16)
+			driver = gdal.GetDriverByName('GTiff')
+			output_ds = driver.Create(f'{tmpdir}/{tile}_num.tif', xsize,ysize, 1, gdal.GDT_UInt16, options=['COMPRESS=LZW','TILED=YES','COPY_SRC_OVERVIEWS=YES','BIGTIFF=YES'])
+			output_ds.SetGeoTransform(gt)
+			output_ds.SetProjection(wkt)
+			band = output_ds.GetRasterBand(1)
+			band.WriteArray(n)
+			band.SetNoDataValue(nodata)
+			band.FlushCache()
+			del output_ds
 			logger.info("Copying files")
-			shutil.copyfile(f'{tmpdir}/{tile}_slope.tif',f'{output}/{tile}_slope.tif')
-			shutil.copyfile(f'{tmpdir}/{tile}_intercept.tif',f'{output}/{tile}_intercept.tif')
-			shutil.copyfile(f'{tmpdir}/{tile}_pval.tif',f'{output}/{tile}_pval.tif')
+			shutil.copyfile(f'{tmpdir}/{tile}_slope.tif',f'{output}/{tile}_{si}_slope.tif')
+			shutil.copyfile(f'{tmpdir}/{tile}_intercept.tif',f'{output}/{tile}_{si}_intercept.tif')
+			shutil.copyfile(f'{tmpdir}/{tile}_pval.tif',f'{output}/{tile}_{si}_pval.tif')
+			shutil.copyfile(f'{tmpdir}/{tile}_num.tif',f'{output}/{tile}_{si}_num.tif')
 			
 
 def main():
@@ -196,6 +226,7 @@ def main():
 	parser.add_argument('--ds',type=str,required=True)
 	parser.add_argument('--de',type=str,required=True)
 	parser.add_argument('--output',type=str,required=True)
+	parser.add_argument('--si',type=str,required=True)
 	parser.add_argument('--mode',type=str,required=True)
 	parser.add_argument('--user',type=str,required=True)
 	parser.add_argument('--pwd',type=str,required=True)
@@ -208,7 +239,6 @@ def main():
 	logger.info("Password: "+os.environ.get('EARTHDATA_PASSWORD'))
 	
 	earthaccess.login()
-	# s3_manager = S3AuthManager(edl_token=args.token)
-	boreal_ndvi_trend(args.tile,args.ys,args.ye,args.ds,args.de,args.output)
+	boreal_si_trend(args.tile,args.ys,args.ye,args.ds,args.de,args.output,args.si,args.mode)
 if __name__ == '__main__':
 	main()
