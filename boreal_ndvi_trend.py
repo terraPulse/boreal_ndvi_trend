@@ -62,17 +62,20 @@ def tile_bounds(tile):
 	xmax = xmin+1.0
 	ymin = ymax-1.0
 	return (xmin,ymin,xmax,ymax)
-def get_files(bbox, start_date, end_date,si):
+def get_files_l30(bbox, start_date, end_date,si):
 	file_list = []
 	results = earthaccess.search_data(short_name='HLSL30_VI',cloud_hosted=True,temporal = (start_date, end_date),bounding_box = bbox)
 	for rec in results:
 		for url in rec.data_links(access='direct'):
-			if f'{si.upper()}.tif' in url:
+			if f'.{si.upper()}.tif' in url:
 				file_list.append(url)
+	return file_list
+def get_files_s30(bbox, start_date, end_date,si):
+	file_list = []
 	results = earthaccess.search_data(short_name='HLSS30_VI',cloud_hosted=True,temporal = (start_date, end_date),bounding_box = bbox)
 	for rec in results:
 		for url in rec.data_links(access='direct'):
-			if f'{si.upper()}.tif' in url:
+			if f'.{si.upper()}.tif' in url:
 				file_list.append(url)
 	return file_list
 def get_files_lc2(tile,year,si):
@@ -105,7 +108,9 @@ def boreal_si_trend(tile,ys,ye,ds,de,output,indices,mode):
 		with tempfile.TemporaryDirectory() as tmpdir:
 			for year in range(ys,ye+1):
 				if mode == 'hls':
-					si_files = get_files(bbox,f'{year}-{ds}',f'{year}-{de}',si)
+					si_files = get_files_l30(bbox,f'{year}-{ds}',f'{year}-{de}',si)+get_files_s30(bbox,f'{year}-{ds}',f'{year}-{de}',si)
+				elif mode == 'hls_l30':
+					si_files = get_files_l30(bbox,f'{year}-{ds}',f'{year}-{de}',si)+get_files_s30(bbox,f'{year}-{ds}',f'{year}-{de}',si)
 				elif mode == 'lc2':
 					si_files = get_files_lc2(tile,year,si)
 				with tempfile.TemporaryDirectory() as cachedir:
@@ -113,7 +118,15 @@ def boreal_si_trend(tile,ys,ye,ds,de,output,indices,mode):
 						logger.info(si_file)
 						si_arr = None
 						try:
-							if mode == 'hls':
+							if mode == 'lc2':
+								si_ds = gdal.Open(si_file)
+								si_arr = si_ds.GetRasterBand(1).ReadAsArray()
+								gt = si_ds.GetGeoTransform()
+								wkt = si_ds.GetProjectionRef()
+								xsize, ysize=si_ds.RasterXSize,si_ds.RasterYSize
+								si_ds = None
+								si_arr = np.where(si_arr == nodata,np.nan,0.0001*si_arr)
+							else:
 								local_file = earthaccess.download(si_file,local_path=cachedir,provider='LPCLOUD')
 								logger.info(local_file)
 								si_warped = gdal.Warp(f'{tmpdir}/si.tif', local_file, options=warp_options)
@@ -133,14 +146,6 @@ def boreal_si_trend(tile,ys,ye,ds,de,output,indices,mode):
 								qa_ds = None
 								mask = mask_hls(qa_arr,mask_list=['cloud','adj_cloud','water','snowice'])
 								si_arr = np.where((si_arr == nodata) |(mask == 1),np.nan,0.0001*si_arr)
-							elif mode == 'lc2':
-								si_ds = gdal.Open(si_file)
-								si_arr = si_ds.GetRasterBand(1).ReadAsArray()
-								gt = si_ds.GetGeoTransform()
-								wkt = si_ds.GetProjectionRef()
-								xsize, ysize=si_ds.RasterXSize,si_ds.RasterYSize
-								si_ds = None
-								si_arr = np.where(si_arr == nodata,np.nan,0.0001*si_arr)
 							if n is None:
 								n = np.where(np.isnan(si_arr),0,1)
 								sum_x = np.where(np.isnan(si_arr),0,year)
