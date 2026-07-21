@@ -109,7 +109,7 @@ def boreal_si_trend(tile,ys,ye,ds,de,output,indices,mode):
 			for year in range(ys,ye+1):
 				if mode == 'hls':
 					si_files = get_files_l30(bbox,f'{year}-{ds}',f'{year}-{de}',si)+get_files_s30(bbox,f'{year}-{ds}',f'{year}-{de}',si)
-				elif mode == 'hls_l30':
+				elif mode == 'l30':
 					si_files = get_files_l30(bbox,f'{year}-{ds}',f'{year}-{de}',si)
 				elif mode == 'lc2':
 					si_files = get_files_lc2(tile,year,si)
